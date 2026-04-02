@@ -2,74 +2,73 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DTLdabs OBS Clip Shuffle</title>
-    <script src="https://player.twitch.tv/js/embed/v1.js"></script>
+    <title>DTLdabs Shuffle</title>
     <style>
-        body { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100vh; color: #fff; font-family: sans-serif; }
-        #twitch-embed { width: 100vw; height: 100vh; }
-        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; 
-                   background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
-        .btn { background: #9146ff; border: none; color: white; padding: 20px 40px; border-radius: 5px; font-weight: bold; font-size: 24px; cursor: pointer; }
+        body { margin: 0; padding: 0; background: #000; color: #fff; font-family: sans-serif; height: 100vh; overflow: hidden; }
+        #player-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        iframe { width: 100%; height: 100%; border: none; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .btn { background: #9146ff; border: none; color: white; padding: 20px 40px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 24px; margin-top: 20px; }
+        #debug { position: absolute; bottom: 10px; left: 10px; font-size: 10px; opacity: 0.3; }
     </style>
 </head>
 <body>
 
-    <div id="overlay" onclick="startShuffle()">
+    <div id="overlay">
         <h1>DTLdabs Shuffle</h1>
-        <p id="status">Syncing with Twitch...</p>
-        <button class="btn" id="start-btn" style="display:none;">Click to Activate Audio & Start</button>
+        <p id="status">Syncing clips...</p>
+        <button id="start-btn" class="btn" style="display:none;" onclick="start()">START SHUFFLE</button>
     </div>
 
-    <div id="twitch-embed"></div>
+    <div id="player-container"></div>
+    <div id="debug"></div>
 
     <script>
         let clips = [];
-        let player = null;
         let timer = null;
+        let isFirstClip = true;
 
         async function init() {
+            // Debugging the domain for Twitch Parent requirements
+            document.getElementById('debug').innerText = "Domain detected: " + window.location.hostname;
+
             try {
                 const res = await fetch('/api/get-clips');
                 const data = await res.json();
                 if (data.data && data.data.length > 0) {
                     clips = data.data;
-                    document.getElementById('status').innerText = clips.length + " clips synced.";
+                    document.getElementById('status').innerText = clips.length + " clips ready.";
                     document.getElementById('start-btn').style.display = 'block';
                 }
             } catch (err) { document.getElementById('status').innerText = "API Error."; }
         }
 
-        function startShuffle() {
-            // HACK: Play a silent sound to "unlock" the browser's audio context
-            const silentAudio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
-            silentAudio.play().catch(() => {});
-
+        function start() {
             document.getElementById('overlay').style.display = 'none';
-            playNext();
+            play();
         }
 
-        function playNext() {
+        function play() {
             if (clips.length === 0) return;
             if (timer) clearTimeout(timer);
 
             const clip = clips[Math.floor(Math.random() * clips.length)];
+            const container = document.getElementById('player-container');
             const domain = window.location.hostname;
 
-            // Clear previous player
-            document.getElementById('twitch-embed').innerHTML = '';
+            // HACK: We play the VERY FIRST clip muted to ensure autoplay kicks in.
+            // Every clip AFTER that will attempt to play with sound (muted=false).
+            const isMuted = isFirstClip ? "true" : "false";
+            
+            const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=${isMuted}`;
 
-            // Using the SDK constructor
-            player = new Twitch.Embed("twitch-embed", {
-                width: "100%",
-                height: "100%",
-                clip: clip.id,
-                parent: [domain],
-                autoplay: true,
-                muted: false // Attempting full audio
-            });
+            container.innerHTML = `<iframe src="${url}" allow="autoplay; fullscreen"></iframe>`;
 
-            // SDKs are safer for OBS. We set the timer based on clip duration.
-            timer = setTimeout(playNext, (clip.duration * 1000) + 3000);
+            console.log(`Playing: ${clip.title} | Muted: ${isMuted}`);
+
+            isFirstClip = false; // Next clips will try to play with sound
+
+            timer = setTimeout(play, (clip.duration * 1000) + 2500);
         }
 
         window.onload = init;
