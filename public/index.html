@@ -2,27 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DTLdabs Shuffle</title>
+    <title>DTLdabs OBS Shuffle</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; height: 100vh; overflow: hidden; }
+        body { margin: 0; padding: 0; background: transparent; overflow: hidden; height: 100vh; }
         #player-container { width: 100vw; height: 100vh; }
         iframe { width: 100%; height: 100%; border: none; }
-        #overlay { position: fixed; z-index: 100; top: 0; left: 0; width: 100%; height: 100%; background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        button { background: #9146ff; border: none; color: white; padding: 20px 40px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 24px; }
-        #next-btn { position: absolute; bottom: 30px; right: 30px; z-index: 50; padding: 12px 24px; opacity: 0.5; background: #9146ff; color: white; border: none; border-radius: 4px; display: none; }
     </style>
 </head>
 <body>
-
-    <div id="overlay">
-        <h1>DTLdabs Shuffle</h1>
-        <p id="status">Syncing clips...</p>
-        <button id="start-btn" style="display:none;" onclick="start()">START SHUFFLE</button>
-    </div>
-
     <div id="player-container"></div>
-    <button id="next-btn" onclick="play()">Next Clip</button>
 
     <script>
         let clips = [];
@@ -34,18 +22,9 @@
                 const data = await response.json();
                 if (data.data && data.data.length > 0) {
                     clips = data.data;
-                    document.getElementById('status').innerText = clips.length + " clips ready.";
-                    document.getElementById('start-btn').style.display = 'block';
+                    play();
                 }
-            } catch (err) {
-                document.getElementById('status').innerText = "API Connection Failed.";
-            }
-        }
-
-        function start() {
-            document.getElementById('overlay').style.display = 'none';
-            document.getElementById('next-btn').style.display = 'block';
-            play();
+            } catch (err) { console.error("API Error"); }
         }
 
         function play() {
@@ -55,25 +34,16 @@
             const clip = clips[Math.floor(Math.random() * clips.length)];
             const container = document.getElementById('player-container');
             
-            // SECURITY CHECK: If you are in the Vercel Preview Toolbar, 
-            // hostname might be 'vercel.app'. 
+            // Critical: If your Vercel URL is 'dtldabs.vercel.app', 
+            // the parent must be 'dtldabs.vercel.app'
             const parent = window.location.hostname;
             
-            // Using muted=true is non-negotiable for the first 5-10 plays 
-            // until the browser learns you like this site.
             const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${parent}&autoplay=true&muted=true`;
 
-            // We use a key to force the DOM to treat it as a new element
-            const iframe = document.createElement('iframe');
-            iframe.src = url;
-            iframe.allow = "autoplay; fullscreen";
-            iframe.id = "twitch-iframe";
-            
-            container.innerHTML = '';
-            container.appendChild(iframe);
+            container.innerHTML = `<iframe src="${url}" allow="autoplay; fullscreen"></iframe>`;
 
-            // AUTO-SKIP TIMER
-            timer = setTimeout(play, (clip.duration * 1000) + 2000);
+            // Duration + buffer
+            timer = setTimeout(play, (clip.duration * 1000) + 2500);
         }
 
         window.onload = init;
