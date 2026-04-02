@@ -3,26 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DTLdabs Random Clips</title>
+    <title>DTLdabs Clip Shuffle</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        /* Notice the 'allow' attribute below - that's the key */
-        #clip-frame { width: 100vw; height: 100vh; border: none; position: absolute; top: 0; left: 0; z-index: 1; }
-        #overlay { position: relative; z-index: 10; text-align: center; background: rgba(0,0,0,0.85); padding: 40px; border-radius: 12px; border: 1px solid #9146ff; }
-        button { background: #9146ff; border: none; color: white; padding: 15px 30px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 20px; }
-        #next-btn { position: absolute; bottom: 30px; right: 30px; z-index: 100; display: none; background: rgba(145, 70, 255, 0.5); }
-        #next-btn:hover { background: #9146ff; }
+        body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        #clip-frame { width: 100vw; height: 100vh; border: none; flex-grow: 1; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        button { background: #9146ff; border: none; color: white; padding: 20px 40px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 24px; }
+        button:hover { background: #772ce8; }
+        #next-btn { position: absolute; bottom: 30px; right: 30px; z-index: 50; padding: 12px 24px; font-size: 16px; opacity: 0.6; }
+        #next-btn:hover { opacity: 1; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
-        <h1>DTLdabs Clip Shuffle</h1>
-        <p id="status">Fetching clips...</p>
-        <button id="start-btn" style="display:none;" onclick="startPlayback()">Click to Start</button>
+        <h1>DTLdabs Clip Player</h1>
+        <p id="status">Loading clips...</p>
+        <button id="start-btn" style="display:none;" onclick="startPlayback()">START AUTOPLAY</button>
     </div>
 
-    <iframe id="clip-frame" allow="autoplay; fullscreen" src=""></iframe>
+    <iframe id="clip-frame" 
+            allow="autoplay; fullscreen" 
+            src="about:blank"></iframe>
+
     <button id="next-btn" onclick="playRandomClip()">Next Clip</button>
 
     <script>
@@ -35,17 +38,17 @@
                 const data = await response.json();
                 if (data.data && data.data.length > 0) {
                     clips = data.data;
-                    document.getElementById('status').innerText = `Ready with ${clips.length} clips.`;
-                    document.getElementById('start-btn').style.display = 'inline-block';
+                    document.getElementById('status').innerText = `${clips.length} clips loaded.`;
+                    document.getElementById('start-btn').style.display = 'block';
                 }
             } catch (err) {
-                document.getElementById('status').innerText = "API Error.";
+                document.getElementById('status').innerText = "API Error - Check Vercel Logs";
             }
         }
 
         function startPlayback() {
+            // Remove overlay immediately
             document.getElementById('overlay').style.display = 'none';
-            document.getElementById('next-btn').style.display = 'block';
             playRandomClip();
         }
 
@@ -56,12 +59,14 @@
             const clip = clips[Math.floor(Math.random() * clips.length)];
             const domain = window.location.hostname;
             
-            // Try muted=false first. If it still doesn't play, change to muted=true
-            const embedUrl = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=false`;
+            // WE USE MUTED=TRUE TO FORCE START. 
+            // Once the first one starts, you can manually unmute it in the player.
+            const embedUrl = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=true`;
             
+            console.log("Loading clip:", clip.id);
             document.getElementById('clip-frame').src = embedUrl;
 
-            // Auto-advance logic
+            // Set timer for the next one
             const durationMs = (clip.duration * 1000) + 2000;
             nextClipTimer = setTimeout(playRandomClip, durationMs);
         }
