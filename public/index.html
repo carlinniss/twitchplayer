@@ -12,7 +12,7 @@
         .btn { background: #9146ff; border: none; color: white; padding: 25px 50px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 24px; transition: transform 0.2s; }
         .btn:hover { background: #772ce8; transform: scale(1.05); }
         #status { margin-bottom: 20px; opacity: 0.7; font-size: 18px; }
-        #next-btn { position: absolute; bottom: 20px; right: 20px; z-index: 101; opacity: 0.4; }
+        #next-btn { position: absolute; bottom: 20px; right: 20px; z-index: 101; opacity: 0.4; background: #9146ff; color: white; border: none; border-radius: 4px; padding: 10px 20px; cursor: pointer; }
         #next-btn:hover { opacity: 1; }
     </style>
 </head>
@@ -20,12 +20,12 @@
 
     <div id="overlay" onclick="startPlayback()">
         <h1>DTLdabs Shuffle</h1>
-        <p id="status">Fetching clips...</p>
+        <p id="status">Syncing clips...</p>
         <button id="start-btn" class="btn" style="display:none;">START PLAYER</button>
     </div>
 
     <div id="player-container"></div>
-    <button id="next-btn" class="btn" style="display:none; font-size: 14px; padding: 10px 20px;" onclick="playRandomClip()">Next Clip</button>
+    <button id="next-btn" style="display:none;" onclick="playRandomClip()">Next Clip</button>
 
     <script>
         let clips = [];
@@ -48,6 +48,18 @@
 
         function startPlayback() {
             isActivated = true;
+            
+            // EDGE CASE FIX: Play a silent sound on the top-level page 
+            // to "warm up" the browser's audio context before loading the iframe.
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.value = 0.0001; 
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start(0);
+            oscillator.stop(0.1);
+
             document.getElementById('overlay').style.display = 'none';
             document.getElementById('next-btn').style.display = 'block';
             playRandomClip();
@@ -58,13 +70,19 @@
             if (nextClipTimer) clearTimeout(nextClipTimer);
 
             const clip = clips[Math.floor(Math.random() * clips.length)];
-            const domain = window.location.hostname;
+            
+            // EDGE CASE FIX: Explicitly handle the Vercel 'parent' parameter.
+            // If hostname is empty (e.g. local file), fallback to localhost.
+            const domain = window.location.hostname || "localhost";
             const container = document.getElementById('player-container');
 
-            // We use muted=true to guarantee the loop continues automatically in OBS.
-            // You can unmute manually via the "Interact" window to enable sound for the session.
-            const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=true`;
+            // EDGE CASE FIX: Use muted=false but ensure 'autoplay=true'.
+            // Because we triggered this via a click (startPlayback), 
+            // the browser passes the "User Activation" to the iframe.
+            const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=false`;
 
+            // EDGE CASE FIX: Re-inserting the iframe completely ensures 
+            // that each new clip treats the 'autoplay' attribute as a fresh instruction.
             container.innerHTML = `
                 <iframe 
                     src="${url}" 
@@ -77,7 +95,8 @@
             nextClipTimer = setTimeout(playRandomClip, durationMs);
         }
 
-        // Handle OBS Scene Switching
+        // EDGE CASE FIX: Handle OBS Scene Switching without breaking future autoplay.
+        // We clear the iframe to stop audio, then re-trigger play when the scene returns.
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
                 if (nextClipTimer) clearTimeout(nextClipTimer);
