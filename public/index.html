@@ -26,6 +26,7 @@
 
     <script>
         let clips = [];
+        let playlist = [];
         let nextClipTimer = null;
         let isActivated = false;
 
@@ -43,6 +44,16 @@
             }
         }
 
+        function shuffle(array) {
+            let currentIndex = array.length, randomIndex;
+            while (currentIndex != 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
         function startPlayback() {
             isActivated = true;
             document.getElementById('overlay').style.display = 'none';
@@ -53,7 +64,13 @@
             if (clips.length === 0 || !isActivated) return;
             if (nextClipTimer) clearTimeout(nextClipTimer);
 
-            const clip = clips[Math.floor(Math.random() * clips.length)];
+            // If the playlist is empty, refill and reshuffle it
+            if (playlist.length === 0) {
+                playlist = shuffle([...clips]);
+            }
+
+            // Pull the next clip from the shuffled playlist
+            const clip = playlist.pop();
             const domain = window.location.hostname || "localhost";
             const container = document.getElementById('player-container');
 
