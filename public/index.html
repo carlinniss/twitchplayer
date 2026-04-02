@@ -8,34 +8,42 @@
         body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; height: 100vh; overflow: hidden; }
         #player-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
         iframe { width: 100%; height: 100%; border: none; }
-        #next-btn { position: absolute; bottom: 20px; right: 20px; z-index: 101; opacity: 0.1; background: #9146ff; color: white; border: none; border-radius: 4px; padding: 10px 20px; cursor: pointer; transition: opacity 0.3s; }
-        #next-btn:hover { opacity: 1; }
-        #init-msg { position: fixed; top: 10px; left: 10px; color: #333; font-size: 10px; z-index: 100; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
+        .btn { background: #9146ff; border: none; color: white; padding: 25px 50px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 24px; transition: transform 0.2s; }
+        .btn:hover { background: #772ce8; transform: scale(1.05); }
+        #status { margin-bottom: 20px; opacity: 0.7; font-size: 18px; }
     </style>
 </head>
 <body>
 
-    <div id="init-msg">Connecting...</div>
+    <div id="overlay" onclick="startPlayback()">
+        <h1>DTLdabs Shuffle</h1>
+        <p id="status">Syncing clips...</p>
+        <button id="start-btn" class="btn" style="display:none;">START PLAYER</button>
+    </div>
+
     <div id="player-container"></div>
-    <button id="next-btn" onclick="playRandomClip()">Next Clip</button>
 
     <script>
-        let clips = [];
+        let allClips = [];
         let playlist = [];
         let nextClipTimer = null;
-        let isActivated = true; // Set to true to attempt immediate autoplay
+        let isActivated = false;
 
         async function init() {
             try {
                 const response = await fetch('/api/get-clips');
                 const data = await response.json();
                 if (data.data && data.data.length > 0) {
-                    clips = data.data;
-                    document.getElementById('init-msg').style.display = 'none';
-                    playRandomClip();
+                    // FILTER: Automatically remove clips with content warnings (is_mature)
+                    // This ensures the shuffle never stops on a "Start Watching" prompt.
+                    allClips = data.data.filter(clip => !clip.is_mature);
+                    
+                    document.getElementById('status').innerText = allClips.length + " safe clips ready.";
+                    document.getElementById('start-btn').style.display = 'block';
                 }
             } catch (err) {
-                document.getElementById('init-msg').innerText = "API Error";
+                document.getElementById('status').innerText = "Vercel API connection failed.";
             }
         }
 
@@ -49,20 +57,25 @@
             return array;
         }
 
+        function startPlayback() {
+            isActivated = true;
+            document.getElementById('overlay').style.display = 'none';
+            playRandomClip();
+        }
+
         function playRandomClip() {
-            if (clips.length === 0) return;
+            if (allClips.length === 0 || !isActivated) return;
             if (nextClipTimer) clearTimeout(nextClipTimer);
 
+            // Refill and reshuffle playlist when empty to ensure no immediate repeats
             if (playlist.length === 0) {
-                playlist = shuffle([...clips]);
+                playlist = shuffle([...allClips]);
             }
 
             const clip = playlist.pop();
             const domain = window.location.hostname || "localhost";
             const container = document.getElementById('player-container');
 
-            // We attempt unmuted autoplay. 
-            // Note: This will only succeed if the OBS 'Interact' window has been clicked once.
             const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=false`;
 
             container.innerHTML = `
@@ -73,15 +86,17 @@
                 </iframe>
             `;
 
+            // Buffer added to clip duration for loading time
             const durationMs = (clip.duration * 1000) + 2500;
             nextClipTimer = setTimeout(playRandomClip, durationMs);
         }
 
+        // Scene Switching Logic
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
                 if (nextClipTimer) clearTimeout(nextClipTimer);
                 document.getElementById('player-container').innerHTML = '';
-            } else {
+            } else if (isActivated) {
                 playRandomClip();
             }
         });
