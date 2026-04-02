@@ -2,63 +2,92 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DTLdabs Shuffle</title>
     <style>
-        body { margin: 0; padding: 0; background: #000; color: #fff; font-family: sans-serif; height: 100vh; overflow: hidden; }
+        body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; height: 100vh; overflow: hidden; }
         #player-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
         iframe { width: 100%; height: 100%; border: none; }
-        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .btn { background: #9146ff; border: none; color: white; padding: 25px 50px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 24px; }
-        #status { margin-bottom: 20px; opacity: 0.7; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
+        .btn { background: #9146ff; border: none; color: white; padding: 25px 50px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 24px; transition: transform 0.2s; }
+        .btn:hover { background: #772ce8; transform: scale(1.05); }
+        #status { margin-bottom: 20px; opacity: 0.7; font-size: 18px; }
+        #next-btn { position: absolute; bottom: 20px; right: 20px; z-index: 101; opacity: 0.4; }
+        #next-btn:hover { opacity: 1; }
     </style>
 </head>
 <body>
 
-    <div id="overlay">
+    <div id="overlay" onclick="startPlayback()">
         <h1>DTLdabs Shuffle</h1>
         <p id="status">Fetching clips...</p>
-        <button id="start-btn" class="btn" style="display:none;" onclick="start()">START PLAYER</button>
+        <button id="start-btn" class="btn" style="display:none;">START PLAYER</button>
     </div>
 
     <div id="player-container"></div>
+    <button id="next-btn" class="btn" style="display:none; font-size: 14px; padding: 10px 20px;" onclick="playRandomClip()">Next Clip</button>
 
     <script>
         let clips = [];
-        let timer = null;
+        let nextClipTimer = null;
+        let isActivated = false;
 
         async function init() {
             try {
-                const res = await fetch('/api/get-clips');
-                const data = await res.json();
+                const response = await fetch('/api/get-clips');
+                const data = await response.json();
                 if (data.data && data.data.length > 0) {
                     clips = data.data;
-                    document.getElementById('status').innerText = clips.length + " clips loaded.";
+                    document.getElementById('status').innerText = clips.length + " clips synced.";
                     document.getElementById('start-btn').style.display = 'block';
                 }
-            } catch (err) { document.getElementById('status').innerText = "API Error."; }
+            } catch (err) {
+                document.getElementById('status').innerText = "Vercel API connection failed.";
+            }
         }
 
-        function start() {
+        function startPlayback() {
+            isActivated = true;
             document.getElementById('overlay').style.display = 'none';
-            play();
+            document.getElementById('next-btn').style.display = 'block';
+            playRandomClip();
         }
 
-        function play() {
-            if (clips.length === 0) return;
-            if (timer) clearTimeout(timer);
+        function playRandomClip() {
+            if (clips.length === 0 || !isActivated) return;
+            if (nextClipTimer) clearTimeout(nextClipTimer);
 
             const clip = clips[Math.floor(Math.random() * clips.length)];
             const domain = window.location.hostname;
             const container = document.getElementById('player-container');
 
-            // We MUST use muted=false here if you want sound.
-            // If the browser blocks it, the video will start PAUSED.
+            // muted=false requires a user interaction (the Start button click)
             const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=false`;
 
-            container.innerHTML = `<iframe src="${url}" allow="autoplay; fullscreen"></iframe>`;
+            container.innerHTML = `
+                <iframe 
+                    src="${url}" 
+                    allow="autoplay; fullscreen" 
+                    preload="auto">
+                </iframe>
+            `;
 
-            timer = setTimeout(play, (clip.duration * 1000) + 2500);
+            // Auto-advance logic
+            const durationMs = (clip.duration * 1000) + 2500;
+            nextClipTimer = setTimeout(playRandomClip, durationMs);
         }
+
+        // Handle OBS Scene Switching
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) {
+                // Stop everything when scene is hidden to kill "ghost audio"
+                if (nextClipTimer) clearTimeout(nextClipTimer);
+                document.getElementById('player-container').innerHTML = '';
+            } else if (isActivated) {
+                // Resume shuffle when scene becomes visible again
+                playRandomClip();
+            }
+        });
 
         window.onload = init;
     </script>
