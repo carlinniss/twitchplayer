@@ -31,6 +31,7 @@
         let clips = [];
         let nextClipTimer = null;
         let isActivated = false;
+        let forceMuteOnce = false;
 
         async function init() {
             try {
@@ -48,18 +49,7 @@
 
         function startPlayback() {
             isActivated = true;
-            
-            // EDGE CASE FIX: Play a silent sound on the top-level page 
-            // to "warm up" the browser's audio context before loading the iframe.
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            gainNode.gain.value = 0.0001; 
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            oscillator.start(0);
-            oscillator.stop(0.1);
-
+            forceMuteOnce = false; // User clicked, so we start with sound
             document.getElementById('overlay').style.display = 'none';
             document.getElementById('next-btn').style.display = 'block';
             playRandomClip();
@@ -70,19 +60,19 @@
             if (nextClipTimer) clearTimeout(nextClipTimer);
 
             const clip = clips[Math.floor(Math.random() * clips.length)];
-            
-            // EDGE CASE FIX: Explicitly handle the Vercel 'parent' parameter.
-            // If hostname is empty (e.g. local file), fallback to localhost.
             const domain = window.location.hostname || "localhost";
             const container = document.getElementById('player-container');
 
-            // EDGE CASE FIX: Use muted=false but ensure 'autoplay=true'.
-            // Because we triggered this via a click (startPlayback), 
-            // the browser passes the "User Activation" to the iframe.
-            const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=false`;
+            // Logic: Resuming from a hidden scene (visibilitychange) usually blocks sound.
+            // We force the first resume-clip to be muted to ensure it autoplays.
+            const muteParam = forceMuteOnce ? "true" : "false";
+            
+            // Reset the flag so subsequent clips try to play unmuted
+            forceMuteOnce = false;
 
-            // EDGE CASE FIX: Re-inserting the iframe completely ensures 
-            // that each new clip treats the 'autoplay' attribute as a fresh instruction.
+            const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=${muteParam}`;
+
+            // We use innerHTML injection here as it is the most stable method for Twitch embeds
             container.innerHTML = `
                 <iframe 
                     src="${url}" 
@@ -95,13 +85,16 @@
             nextClipTimer = setTimeout(playRandomClip, durationMs);
         }
 
-        // EDGE CASE FIX: Handle OBS Scene Switching without breaking future autoplay.
-        // We clear the iframe to stop audio, then re-trigger play when the scene returns.
+        // Fix for OBS Scene Switching
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
+                // Scene hidden: Kill audio and stop the loop
                 if (nextClipTimer) clearTimeout(nextClipTimer);
                 document.getElementById('player-container').innerHTML = '';
             } else if (isActivated) {
+                // Scene active: Resume the shuffle. 
+                // We must mute this specific load to guarantee it autoplays without a click.
+                forceMuteOnce = true;
                 playRandomClip();
             }
         });
