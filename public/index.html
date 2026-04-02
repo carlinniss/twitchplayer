@@ -2,81 +2,77 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DTLdabs Shuffle</title>
+    <title>DTLdabs OBS Clip Shuffle</title>
+    <script src="https://player.twitch.tv/js/embed/v1.js"></script>
     <style>
-        body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; height: 100vh; overflow: hidden; }
-        #player-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
-        iframe { width: 100%; height: 100%; border: none; }
-        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
-        #overlay h1 { margin-bottom: 20px; font-size: 32px; color: #9146ff; }
-        #overlay p { font-size: 18px; margin-bottom: 30px; opacity: 0.8; }
-        .btn { background: #9146ff; border: none; color: white; padding: 15px 40px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 20px; text-transform: uppercase; }
-        .btn:hover { background: #772ce8; }
-        #next-btn { position: absolute; bottom: 20px; right: 20px; z-index: 101; opacity: 0.3; transition: opacity 0.3s; }
-        #next-btn:hover { opacity: 1; }
+        body { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100vh; color: #fff; font-family: sans-serif; }
+        #twitch-embed { width: 100vw; height: 100vh; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; 
+                   background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
+        .btn { background: #9146ff; border: none; color: white; padding: 20px 40px; border-radius: 5px; font-weight: bold; font-size: 24px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <div id="overlay" onclick="startPlayback()">
+    <div id="overlay" onclick="startShuffle()">
         <h1>DTLdabs Shuffle</h1>
-        <p id="status">Syncing clips...</p>
-        <button id="start-btn" class="btn" style="display:none;">Click Anywhere to Start</button>
+        <p id="status">Syncing with Twitch...</p>
+        <button class="btn" id="start-btn" style="display:none;">Click to Activate Audio & Start</button>
     </div>
 
-    <div id="player-container"></div>
-    <button id="next-btn" class="btn" style="display:none;" onclick="playRandomClip()">Next</button>
+    <div id="twitch-embed"></div>
 
     <script>
         let clips = [];
-        let nextClipTimer = null;
+        let player = null;
+        let timer = null;
 
         async function init() {
             try {
-                const response = await fetch('/api/get-clips');
-                const data = await response.json();
+                const res = await fetch('/api/get-clips');
+                const data = await res.json();
                 if (data.data && data.data.length > 0) {
                     clips = data.data;
-                    document.getElementById('status').innerText = clips.length + " clips ready.";
+                    document.getElementById('status').innerText = clips.length + " clips synced.";
                     document.getElementById('start-btn').style.display = 'block';
                 }
-            } catch (err) {
-                document.getElementById('status').innerText = "API Error.";
-            }
+            } catch (err) { document.getElementById('status').innerText = "API Error."; }
         }
 
-        function startPlayback() {
+        function startShuffle() {
+            // HACK: Play a silent sound to "unlock" the browser's audio context
+            const silentAudio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
+            silentAudio.play().catch(() => {});
+
             document.getElementById('overlay').style.display = 'none';
-            document.getElementById('next-btn').style.display = 'block';
-            playRandomClip();
+            playNext();
         }
 
-        function playRandomClip() {
+        function playNext() {
             if (clips.length === 0) return;
-            if (nextClipTimer) clearTimeout(nextClipTimer);
+            if (timer) clearTimeout(timer);
 
             const clip = clips[Math.floor(Math.random() * clips.length)];
             const domain = window.location.hostname;
-            const container = document.getElementById('player-container');
 
-            // Force full iframe rebuild with muted=false for audio
-            const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=false`;
+            // Clear previous player
+            document.getElementById('twitch-embed').innerHTML = '';
 
-            container.innerHTML = `
-                <iframe 
-                    src="${url}" 
-                    allow="autoplay; fullscreen" 
-                    preload="auto">
-                </iframe>
-            `;
+            // Using the SDK constructor
+            player = new Twitch.Embed("twitch-embed", {
+                width: "100%",
+                height: "100%",
+                clip: clip.id,
+                parent: [domain],
+                autoplay: true,
+                muted: false // Attempting full audio
+            });
 
-            // Auto-advance based on clip duration + buffer
-            const durationMs = (clip.duration * 1000) + 2500;
-            nextClipTimer = setTimeout(playRandomClip, durationMs);
+            // SDKs are safer for OBS. We set the timer based on clip duration.
+            timer = setTimeout(playNext, (clip.duration * 1000) + 3000);
         }
 
-            window.onload = init;
+        window.onload = init;
     </script>
 </body>
 </html>
