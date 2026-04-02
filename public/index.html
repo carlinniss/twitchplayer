@@ -3,27 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DTLdabs Clip Shuffle</title>
+    <title>DTLdabs Shuffle</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        #clip-frame { width: 100vw; height: 100vh; border: none; flex-grow: 1; }
+        body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; height: 100vh; overflow: hidden; }
+        #clip-frame { width: 100vw; height: 100vh; border: none; }
         #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        button { background: #9146ff; border: none; color: white; padding: 20px 40px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 24px; }
-        button:hover { background: #772ce8; }
-        #next-btn { position: absolute; bottom: 30px; right: 30px; z-index: 50; padding: 12px 24px; font-size: 16px; opacity: 0.6; }
+        button { background: #9146ff; border: none; color: white; padding: 20px 40px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 24px; transition: 0.2s; }
+        button:hover { background: #772ce8; transform: scale(1.05); }
+        #next-btn { position: absolute; bottom: 30px; right: 30px; z-index: 50; padding: 12px 24px; opacity: 0.5; background: rgba(145, 70, 255, 0.8); }
         #next-btn:hover { opacity: 1; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
-        <h1>DTLdabs Clip Player</h1>
-        <p id="status">Loading clips...</p>
+        <h1>DTLdabs Clip Shuffle</h1>
+        <p id="status">Syncing with Twitch...</p>
         <button id="start-btn" style="display:none;" onclick="startPlayback()">START AUTOPLAY</button>
     </div>
 
     <iframe id="clip-frame" 
-            allow="autoplay; fullscreen" 
+            allow="autoplay; fullscreen; picture-in-picture; encrypted-media;" 
             src="about:blank"></iframe>
 
     <button id="next-btn" onclick="playRandomClip()">Next Clip</button>
@@ -38,18 +38,27 @@
                 const data = await response.json();
                 if (data.data && data.data.length > 0) {
                     clips = data.data;
-                    document.getElementById('status').innerText = `${clips.length} clips loaded.`;
+                    document.getElementById('status').innerText = `${clips.length} clips ready.`;
                     document.getElementById('start-btn').style.display = 'block';
                 }
             } catch (err) {
-                document.getElementById('status').innerText = "API Error - Check Vercel Logs";
+                document.getElementById('status').innerText = "Vercel API connection failed.";
             }
         }
 
+        // CRITICAL: This function is triggered DIRECTLY by the click.
         function startPlayback() {
-            // Remove overlay immediately
+            const domain = window.location.hostname;
+            const firstClip = clips[Math.floor(Math.random() * clips.length)];
+            
+            // We set the SRC immediately in the click turn to "warm up" the iframe's autoplay permission
+            const frame = document.getElementById('clip-frame');
+            frame.src = `https://clips.twitch.tv/embed?clip=${firstClip.id}&parent=${domain}&autoplay=true&muted=true`;
+            
             document.getElementById('overlay').style.display = 'none';
-            playRandomClip();
+            
+            // Set the timer for the NEXT clip
+            scheduleNext(firstClip.duration);
         }
 
         function playRandomClip() {
@@ -59,15 +68,13 @@
             const clip = clips[Math.floor(Math.random() * clips.length)];
             const domain = window.location.hostname;
             
-            // WE USE MUTED=TRUE TO FORCE START. 
-            // Once the first one starts, you can manually unmute it in the player.
-            const embedUrl = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=true`;
-            
-            console.log("Loading clip:", clip.id);
-            document.getElementById('clip-frame').src = embedUrl;
+            document.getElementById('clip-frame').src = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=true`;
 
-            // Set timer for the next one
-            const durationMs = (clip.duration * 1000) + 2000;
+            scheduleNext(clip.duration);
+        }
+
+        function scheduleNext(duration) {
+            const durationMs = (duration * 1000) + 2500; // Added a slightly longer buffer for the iframe reload
             nextClipTimer = setTimeout(playRandomClip, durationMs);
         }
 
