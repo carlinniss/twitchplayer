@@ -61,8 +61,9 @@
             const domain = window.location.hostname;
             const container = document.getElementById('player-container');
 
-            // muted=false requires a user interaction (the Start button click)
-            const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=false`;
+            // We use muted=true to guarantee the loop continues automatically in OBS.
+            // You can unmute manually via the "Interact" window to enable sound for the session.
+            const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=true`;
 
             container.innerHTML = `
                 <iframe 
@@ -72,7 +73,6 @@
                 </iframe>
             `;
 
-            // Auto-advance logic
             const durationMs = (clip.duration * 1000) + 2500;
             nextClipTimer = setTimeout(playRandomClip, durationMs);
         }
@@ -80,11 +80,9 @@
         // Handle OBS Scene Switching
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
-                // Stop everything when scene is hidden to kill "ghost audio"
                 if (nextClipTimer) clearTimeout(nextClipTimer);
                 document.getElementById('player-container').innerHTML = '';
             } else if (isActivated) {
-                // Resume shuffle when scene becomes visible again
                 playRandomClip();
             }
         });
