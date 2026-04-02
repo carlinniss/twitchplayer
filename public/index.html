@@ -3,16 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DTLdabs Clip Shuffle</title>
+    <title>DTLdabs Random Clips</title>
     <style>
         body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        /* Notice the 'allow' attribute below - that's the key */
         #clip-frame { width: 100vw; height: 100vh; border: none; position: absolute; top: 0; left: 0; z-index: 1; }
         #overlay { position: relative; z-index: 10; text-align: center; background: rgba(0,0,0,0.85); padding: 40px; border-radius: 12px; border: 1px solid #9146ff; }
-        button { background: #9146ff; border: none; color: white; padding: 15px 30px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        button:hover { background: #772ce8; }
-        #next-btn { position: absolute; bottom: 30px; right: 30px; z-index: 100; display: none; opacity: 0.5; transition: opacity 0.3s; }
-        #next-btn:hover { opacity: 1; }
-        #info { position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 4px; font-size: 14px; pointer-events: none; border-left: 3px solid #9146ff; }
+        button { background: #9146ff; border: none; color: white; padding: 15px 30px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 20px; }
+        #next-btn { position: absolute; bottom: 30px; right: 30px; z-index: 100; display: none; background: rgba(145, 70, 255, 0.5); }
+        #next-btn:hover { background: #9146ff; }
     </style>
 </head>
 <body>
@@ -20,76 +19,51 @@
     <div id="overlay">
         <h1>DTLdabs Clip Shuffle</h1>
         <p id="status">Fetching clips...</p>
-        <button id="start-btn" style="display:none;" onclick="startPlayback()">Click to Start Autoplay</button>
+        <button id="start-btn" style="display:none;" onclick="startPlayback()">Click to Start</button>
     </div>
 
-    <div id="info" style="display:none;"></div>
-    <iframe id="clip-frame" allowfullscreen="true"></iframe>
+    <iframe id="clip-frame" allow="autoplay; fullscreen" src=""></iframe>
     <button id="next-btn" onclick="playRandomClip()">Next Clip</button>
 
     <script>
         let clips = [];
         let nextClipTimer = null;
-        let lastClipId = null;
 
         async function init() {
             try {
-                // Pulling from your Vercel Serverless Function
                 const response = await fetch('/api/get-clips');
                 const data = await response.json();
-                
                 if (data.data && data.data.length > 0) {
                     clips = data.data;
-                    document.getElementById('status').innerText = `Loaded ${clips.length} clips.`;
+                    document.getElementById('status').innerText = `Ready with ${clips.length} clips.`;
                     document.getElementById('start-btn').style.display = 'inline-block';
-                } else {
-                    document.getElementById('status').innerText = "No clips found.";
                 }
             } catch (err) {
-                document.getElementById('status').innerText = "API Error. Check Vercel logs.";
+                document.getElementById('status').innerText = "API Error.";
             }
         }
 
         function startPlayback() {
             document.getElementById('overlay').style.display = 'none';
             document.getElementById('next-btn').style.display = 'block';
-            document.getElementById('info').style.display = 'block';
             playRandomClip();
         }
 
         function playRandomClip() {
             if (clips.length === 0) return;
-
-            // Clear existing timer if user clicks "Next" manually to prevent double-skipping
             if (nextClipTimer) clearTimeout(nextClipTimer);
 
-            let randomIndex;
-            let clip;
-
-            // Avoid playing the same clip twice in a row
-            do {
-                randomIndex = Math.floor(Math.random() * clips.length);
-                clip = clips[randomIndex];
-            } while (clips.length > 1 && clip.id === lastClipId);
-
-            lastClipId = clip.id;
-            
+            const clip = clips[Math.floor(Math.random() * clips.length)];
             const domain = window.location.hostname;
-            // Autoplay=true and Muted=false work because of the initial user click
+            
+            // Try muted=false first. If it still doesn't play, change to muted=true
             const embedUrl = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=false`;
             
             document.getElementById('clip-frame').src = embedUrl;
-            document.getElementById('info').innerText = `Now Playing: ${clip.title}`;
 
-            // Twitch clips don't fire an "ended" event to the parent window,
-            // so we use the duration from the API (seconds to ms) + a 2s buffer.
+            // Auto-advance logic
             const durationMs = (clip.duration * 1000) + 2000;
-            
-            console.log(`Clip: ${clip.title} | Duration: ${clip.duration}s | Next in: ${durationMs/1000}s`);
-
-            nextClipTimer = setTimeout(() => {
-                playRandomClip();
-            }, durationMs);
+            nextClipTimer = setTimeout(playRandomClip, durationMs);
         }
 
         window.onload = init;
