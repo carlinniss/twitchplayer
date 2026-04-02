@@ -2,48 +2,40 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DTLdabs Shuffle v2.0</title>
+    <title>DTLdabs Shuffle</title>
     <style>
         body { margin: 0; padding: 0; background: #000; color: #fff; font-family: sans-serif; height: 100vh; overflow: hidden; }
-        #player-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        #player-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
         iframe { width: 100%; height: 100%; border: none; }
-        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-        .btn { background: #9146ff; border: none; color: white; padding: 25px 50px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 24px; margin-top: 20px; box-shadow: 0 0 20px rgba(145, 70, 255, 0.5); }
-        #diag { position: absolute; bottom: 10px; left: 10px; font-family: monospace; font-size: 11px; color: #555; background: rgba(0,0,0,0.5); padding: 5px; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; background: #0e0e10; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .btn { background: #9146ff; border: none; color: white; padding: 25px 50px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 24px; }
+        #status { margin-bottom: 20px; opacity: 0.7; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
         <h1>DTLdabs Shuffle</h1>
-        <p id="status">Syncing with Twitch API...</p>
-        <button id="start-btn" class="btn" style="display:none;" onclick="start()">ACTIVATE & START</button>
-        <p style="margin-top: 20px; font-size: 12px; opacity: 0.5;">If using OBS: Right-click source > Interact > Click the button above.</p>
+        <p id="status">Fetching clips...</p>
+        <button id="start-btn" class="btn" style="display:none;" onclick="start()">START PLAYER</button>
     </div>
 
     <div id="player-container"></div>
-    <div id="diag" id="diag-box"></div>
 
     <script>
         let clips = [];
         let timer = null;
 
         async function init() {
-            // Diagnostic: Show exactly what domain is being sent to Twitch
-            const hostname = window.location.hostname;
-            document.getElementById('diag').innerText = `Domain: ${hostname} | Environment: ${window.self !== window.top ? 'Nested Frame' : 'Top Level'}`;
-
             try {
                 const res = await fetch('/api/get-clips');
                 const data = await res.json();
                 if (data.data && data.data.length > 0) {
                     clips = data.data;
-                    document.getElementById('status').innerText = `${clips.length} clips ready.`;
+                    document.getElementById('status').innerText = clips.length + " clips loaded.";
                     document.getElementById('start-btn').style.display = 'block';
                 }
-            } catch (err) { 
-                document.getElementById('status').innerText = "Vercel API error."; 
-            }
+            } catch (err) { document.getElementById('status').innerText = "API Error."; }
         }
 
         function start() {
@@ -56,20 +48,16 @@
             if (timer) clearTimeout(timer);
 
             const clip = clips[Math.floor(Math.random() * clips.length)];
+            const domain = window.location.hostname;
             const container = document.getElementById('player-container');
-            const hostname = window.location.hostname;
 
-            // We include multiple potential parents to handle Vercel's preview logic
-            const parents = `&parent=${hostname}`;
-            
-            // WE START MUTED = TRUE. This is the only way to guarantee 
-            // the video starts moving without a manual "Play" click.
-            const url = `https://clips.twitch.tv/embed?clip=${clip.id}${parents}&autoplay=true&muted=true`;
+            // We MUST use muted=false here if you want sound.
+            // If the browser blocks it, the video will start PAUSED.
+            const url = `https://clips.twitch.tv/embed?clip=${clip.id}&parent=${domain}&autoplay=true&muted=false`;
 
             container.innerHTML = `<iframe src="${url}" allow="autoplay; fullscreen"></iframe>`;
 
-            // Auto-advance
-            timer = setTimeout(play, (clip.duration * 1000) + 3000);
+            timer = setTimeout(play, (clip.duration * 1000) + 2500);
         }
 
         window.onload = init;
